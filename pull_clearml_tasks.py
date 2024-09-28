@@ -10,17 +10,33 @@ import requests
 import tqdm
 import urllib3
 import sys
+import re
 
 
-def verify_clearml_keys(clearml_access_key,clearml_secret_key):
-    if clearml_access_key is None:
-        raise Exception("clearml_access_key is missing")
+def match_user_secrets(clearml_conf_file):
+    clearml_conf_file = os.path.expanduser(clearml_conf_file)
     
-    if clearml_secret_key is None:
-        raise Exception("clearml_secret_key is missing")
-
-    if clearml_url is None:
-        raise Exception("clearml_url is missing")
+    clearml_api_endpoint = None
+    clearml_access_key = None
+    clearml_secret_key = None
+    
+    url_pattern = re.compile(r'api_server\s*:\s*(https?://\S+)')
+    access_key_pattern = re.compile(r'"access_key"\s*=\s*"(.+?)"')
+    secret_key_pattern = re.compile(r'"secret_key"\s*=\s*"(.+?)"')
+    
+    with open(clearml_conf_file, 'r') as f:
+        data = f.read()
+        
+        url_match = url_pattern.search(data)
+        clearml_api_endpoint = url_match.group(1)
+        
+        access_key_match = access_key_pattern.search(data)
+        clearml_access_key = access_key_match.group(1)
+        
+        secret_key_match = secret_key_pattern.search(data)
+        clearml_secret_key = secret_key_match.group(1)
+        
+    return clearml_api_endpoint, clearml_access_key, clearml_secret_key
 
 def pull_users():
         
@@ -74,7 +90,8 @@ def pull_tasks(user,delete_threshold_days):
             
             for task in tqdm.tqdm(tasks):
                 try:
-                    task_url = f"{clearml_url}:8080/projects/{task.project}/experiments/{task.id}"
+                    task_url_raw = f"{clearml_api_endpoint}/projects/{task.project}/experiments/{task.id}"
+                    task_url = task_url_raw.replace(":8008", ":8080")
 
                     task_data = {
                         "task_id": task.id,
@@ -89,7 +106,7 @@ def pull_tasks(user,delete_threshold_days):
                     task_list.append(task_data)
     
                 except AttributeError as e:
-                    print(f"Error")
+                 print(f"Error")
      
             page += 1
     
@@ -151,13 +168,12 @@ parser.add_argument('--username', nargs='+', type=str, help='limit query to spec
 parser.add_argument('--delete_threshold_days', type=float, help='get tasks older then xxx days, e.g --delete_threshold_days 180, show tasks older then 180 days', required=True)
 args = parser.parse_args()
 
-clearml_url = os.getenv('clearml_url')
-clearml_access_key = os.getenv('clearml_access_key')
-clearml_secret_key = os.getenv('clearml_secret_key')
-clearml_auth = (clearml_access_key, clearml_secret_key)
-clearml_projects_api_endpoint = f"{clearml_url}:8008/projects.get_all"
-clearml_users_api_endpoint = f"{clearml_url}:8008/users.get_all"
 
+clearml_conf_file = '~/clearml.conf'
+clearml_api_endpoint, clearml_access_key, clearml_secret_key = match_user_secrets(clearml_conf_file)
+clearml_auth = (clearml_access_key, clearml_secret_key)
+clearml_projects_api_endpoint = f"{clearml_api_endpoint}/projects.get_all"
+clearml_users_api_endpoint = f"{clearml_api_endpoint}/users.get_all"
 
 users_dict = pull_users()
 
@@ -166,12 +182,11 @@ user_id = match_user_id(users_dict, username)
 if user_id:
     user = user_id
 else:
-    print(f"INFO: ERROR --- Username '{username}' not found")
+    print(f"ERROR --- Username {username} not found")
     sys.exit(1)
 
 tasks_json = f"tasks_user_{user}_{args.delete_threshold_days}_days.json"
 
-verify_clearml_keys(clearml_access_key,clearml_secret_key)
 
 pull_tasks(user,args.delete_threshold_days)
 
