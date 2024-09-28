@@ -35,12 +35,6 @@ python pull_clearml_tasks.py --username Lion S --delete_threshold_days 180
 ### Pre-req 
 
 * Run from existing ClearML enviornemt (`~/clearml.conf` is already configured)
-* Setup ClearML URL and secrets for API access
-```
-export clearml_url=https://<clearml_url>
-export clearml_access_key=<clearml_access_key>
-export clearml_secret_key=<clearml_secret_key>
-```
 * Set `delete_threshold_days` - pull all tasks older then `delete_threshold_days`
 
 ## Delete tasks 
