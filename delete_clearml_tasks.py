@@ -4,18 +4,33 @@ import os
 import requests
 import tqdm
 import urllib3
+import re
 
 
-
-def verify_clearml_keys(clearml_access_key,clearml_secret_key):
-    if clearml_access_key is None:
-        raise Exception("clearml_access_key is missing")
+def match_user_secrets(clearml_conf_file):
     
-    if clearml_secret_key is None:
-        raise Exception("clearml_secret_key is missing")
-
-    if clearml_url is None:
-        raise Exception("clearml_url is missing")
+    clearml_conf_file = os.path.expanduser(clearml_conf_file)
+    clearml_api_endpoint = None
+    clearml_access_key = None
+    clearml_secret_key = None
+    
+    url_pattern = re.compile(r'api_server\s*:\s*(https?://\S+)')
+    access_key_pattern = re.compile(r'"access_key"\s*=\s*"(.+?)"')
+    secret_key_pattern = re.compile(r'"secret_key"\s*=\s*"(.+?)"')
+    
+    with open(clearml_conf_file, 'r') as f:
+        data = f.read()
+        
+        url_match = url_pattern.search(data)
+        clearml_api_endpoint = url_match.group(1)
+        
+        access_key_match = access_key_pattern.search(data)
+        clearml_access_key = access_key_match.group(1)
+        
+        secret_key_match = secret_key_pattern.search(data)
+        clearml_secret_key = secret_key_match.group(1)
+        
+    return clearml_api_endpoint, clearml_access_key, clearml_secret_key
 
 
 def delete_tasks():
@@ -32,6 +47,7 @@ def delete_tasks():
             json_body = {
                  "task": task_id,
                  "force" : True,
+                 "delete_output_models" : True,
             }
             
             full_task_name = f"{project_name}/{task_name}"
@@ -53,14 +69,12 @@ parser = argparse.ArgumentParser(description='Delete ClearML tasks from stastic 
 parser.add_argument('--tasks_json', type=str, help='Point to static tasks_json list of ClearML tasks', required=True)
 args = parser.parse_args()
 
-clearml_url = os.getenv('clearml_url')
-clearml_access_key = os.getenv('clearml_access_key')
-clearml_secret_key = os.getenv('clearml_secret_key')
+
+clearml_conf_file = '~/clearml.conf'
+clearml_api_endpoint, clearml_access_key, clearml_secret_key = match_user_secrets(clearml_conf_file)
 clearml_auth = (clearml_access_key, clearml_secret_key)
-clearml_tasks_delete_api_endpoint = f"{clearml_url}:8008/tasks.delete"
+clearml_projects_api_endpoint = f"{clearml_api_endpoint}/projects.get_all"
+clearml_tasks_delete_api_endpoint = f"{clearml_api_endpoint}/tasks.delete"
+
 
 tasks_json = args.tasks_json
-
-verify_clearml_keys(clearml_access_key,clearml_secret_key)
-
-delete_tasks()
